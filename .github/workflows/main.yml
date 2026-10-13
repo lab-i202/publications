@@ -1,3 +1,4 @@
+
 name: Monitor authors and deploy encrypted Pages
 
 on:
@@ -120,24 +121,52 @@ jobs:
         run: |
           test -s .ci-private/state.enc.json
           python -m pubgroup.ci_state restore
-      - name: Install PDF compiler
+      - name: Install PDF compiler and required report font
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends texlive-xetex texlive-latex-extra texlive-fonts-recommended
-      - name: Generate PDF and encrypted browser bundle (no recollection)
-      - name: Show LaTeX build error
-        if: ${{ failure() }}
-        run: |
-          echo "=== LaTeX build error ==="
-          if [ -f output/pdf/build-error.log ]; then
-            tail -n 150 output/pdf/build-error.log
-          else
-            echo "No LaTeX error log found."
+          sudo apt-get install -y --no-install-recommends \
+            texlive-xetex texlive-latex-extra texlive-fonts-recommended fonts-texgyre
+          font_path="$(kpsewhich texgyreheros-regular.otf || true)"
+          if [ -z "$font_path" ]; then
+            echo '::error::Missing TeX Gyre Heros OpenType font required by pubgroup/report.py'
+            exit 1
           fi
+          echo "Report font found: $font_path"
+      - name: Generate PDF and encrypted browser bundle (no recollection)
         env:
           PUBGROUP_PASSPHRASE: ${{ secrets.PUBGROUP_PASSPHRASE }}
           REPORT_PERIOD: ${{ inputs.period || 'current' }}
         run: python -m pubgroup report --period "$REPORT_PERIOD" --encrypt
+      - name: Diagnose PDF compilation failure (safe for public logs)
+        if: ${{ failure() }}
+        run: |
+          python - <<'PYLOG'
+          from pathlib import Path
+          import re
+
+          logfile = Path('output/pdf/build-error.log')
+          if not logfile.is_file():
+              print('No LaTeX build log found. Check the earlier failed step.')
+              raise SystemExit(0)
+
+          content = logfile.read_text(encoding='utf-8', errors='replace')
+          checks = (
+              ('Missing or inaccessible font', r'fontspec.*error|font.*(?:cannot be found|not found)'),
+              ('Missing LaTeX package or file', r'LaTeX Error: File .*not found'),
+              ('Undefined LaTeX command', r'Undefined control sequence'),
+              ('Unbalanced LaTeX syntax', r'Missing \$ inserted|Missing \} inserted|Extra \}|Runaway argument'),
+              ('Unsupported Unicode character', r'Unicode character .*not set up'),
+              ('LaTeX fatal error', r'Emergency stop|Fatal error occurred'),
+          )
+          matched = False
+          for title, pattern in checks:
+              if re.search(pattern, content, flags=re.IGNORECASE | re.DOTALL):
+                  print('LaTeX diagnostic category: ' + title)
+                  matched = True
+          if not matched:
+              print('LaTeX failed, but no known error category matched.')
+          print('The raw LaTeX log is intentionally not printed because this repository is public and the log may contain decrypted publication data.')
+          PYLOG
       - name: Construct strict deployment allowlist
         env:
           REFRESH_API_URL: ${{ vars.PUBGROUP_REFRESH_API_URL }}
