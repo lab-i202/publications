@@ -125,6 +125,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends texlive-xetex texlive-latex-extra texlive-fonts-recommended
       - name: Generate PDF and encrypted browser bundle (no recollection)
+      - name: Show LaTeX build error
+        if: ${{ failure() }}
+        run: |
+          echo "=== LaTeX build error ==="
+          if [ -f output/pdf/build-error.log ]; then
+            tail -n 150 output/pdf/build-error.log
+          else
+            echo "No LaTeX error log found."
+          fi
         env:
           PUBGROUP_PASSPHRASE: ${{ secrets.PUBGROUP_PASSPHRASE }}
           REPORT_PERIOD: ${{ inputs.period || 'current' }}
