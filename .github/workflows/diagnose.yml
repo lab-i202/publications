@@ -1,0 +1,66 @@
+name: Diagnose CiênciaVitae collection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check profile access and parsing
+        shell: bash
+        run: |
+          python - <<'PY'
+          from datetime import datetime, timezone
+          from pubgroup.network import Client, FetchError
+          from pubgroup.parser import parse_profile
+          from pubgroup.workflow import load_config
+
+          cfg, root = load_config('config.toml')
+          client = Client(root / 'cache' / 'http', cfg['network'])
+          readable = 0
+          total_records = 0
+
+          for profile in cfg['researchers']:
+              researcher_id = profile['id']
+              try:
+                  client.allowed(profile['url'])
+                  html, info = client.get(profile['url'])
+                  _, records, warnings, rejected = parse_profile(
+                      html, profile, datetime.now(timezone.utc).isoformat()
+                  )
+                  readable += 1
+                  total_records += len(records)
+                  print(
+                      f'OK {researcher_id}: HTTP {info["http_status"]}; '
+                      f'{len(records)} records; {len(rejected)} rejected',
+                      flush=True,
+                  )
+              except (FetchError, ValueError, OSError) as exc:
+                  print(
+                      f'FAILED {researcher_id}: {type(exc).__name__}: {exc}',
+                      flush=True,
+                  )
+
+          print(
+              f'SUMMARY: {readable}/{len(cfg["researchers"])} readable '
+              f'profiles; {total_records} records',
+              flush=True,
+          )
+          if readable == 0 or total_records == 0:
+              raise SystemExit('No publication records available; inspect failures above')
+          PY
