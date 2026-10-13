@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Research group publications, sources, BibTeX and annual reports.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <title>i202 · Publications</title>
+  <link rel="stylesheet" href="styles.css"><script src="app.js" defer></script>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar"><a class="brand" href="./" aria-label="Publications home"><span class="mark">i<span>202</span></span><span>Research publications</span></a><div class="top-actions"><label class="theme-control"><span>Theme</span><select id="themeSelect" aria-label="Colour theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><span id="privacyBadge" class="badge">Local listing</span><button id="lockButton" class="button quiet" hidden>Lock</button></div></header>
+    <section id="unlockPanel" class="panel unlock" hidden>
+      <span class="eyebrow">ENCRYPTED COLLECTION</span><h1>Open your publication library.</h1>
+      <p>The report and records are decrypted in this browser. The passphrase is not sent to the server.</p>
+      <form id="unlockForm"><label for="passphrase">Passphrase</label><div class="inline"><input type="password" id="passphrase" required autocomplete="current-password" minlength="16"><button class="button primary" type="submit">Unlock collection</button></div></form>
+      <p id="unlockMessage" class="muted" role="status"></p>
+    </section>
+    <div id="library" hidden>
+      <section class="hero"><div><span class="eyebrow">THE GROUP LIBRARY</span><h1>Our work,<br><span>in one place.</span></h1><p id="groupLabel">Publications from the group's researchers.</p><p class="muted small" id="updateLabel"></p></div><div class="hero-actions"><button id="pdfButton" class="button primary">Download PDF <span aria-hidden="true">↗</span></button><button id="bibButton" class="button">Export filtered BibTeX</button><button id="refreshButton" class="button quiet">Refresh sources</button></div></section>
+      <div id="coverageNotice" class="notice" role="status"></div>
+      <nav class="tabs" aria-label="Library sections"><button class="tab active" data-panel="publicationsPanel" aria-pressed="true">Publications</button><button class="tab" data-panel="metricsPanel" aria-pressed="false">Counts</button><button class="tab" data-panel="sourcesPanel" aria-pressed="false">Sources & changes</button></nav>
+      <section class="stats" aria-label="Filtered publication counts"><div><span id="totalStat">0</span><p>Records</p></div><div><span id="conferenceStat">0</span><p>Conference records</p></div><div><span id="researcherStat">0</span><p>Researchers</p></div><div><span id="newStat">0</span><p>New since last collection</p></div></section>
+      <section class="panel filters" aria-label="Publication filters">
+        <label class="search"><span>Search publications</span><input id="searchInput" type="search" placeholder="Title, author, venue or DOI…"></label>
+        <label><span>Year</span><select id="yearFilter"></select></label>
+        <label><span>Type</span><select id="typeFilter"><option value="">All types</option></select></label>
+        <label><span>Researcher</span><select id="researcherFilter"><option value="">All researchers</option></select></label>
+        <label><span>Status</span><select id="statusFilter"><option value="">All statuses</option><option>published</option><option>accepted</option><option>in press</option><option>unspecified</option></select></label>
+        <label class="check"><input id="newFilter" type="checkbox"><span>New only</span></label>
+      </section>
+      <section id="publicationsPanel" class="content-panel"><div class="list-heading"><h2>Publications <span id="resultCount"></span></h2><span class="muted small">Newest first · unknown months last within year</span></div><div id="publicationList"></div><div class="pagination"><button id="loadMore" class="button" hidden>Show more publications</button></div></section>
+      <section id="metricsPanel" class="content-panel" hidden>
+        <div class="list-heading"><h2>Scientific output</h2><span class="muted small">Uses the current filters</span></div>
+        <div class="panel"><h3>By type</h3><div id="typeChart"></div></div>
+        <div class="panel monthly"><h3>Scientific output by month</h3><p id="monthNote" class="muted small"></p><div class="chart-legend"><span><i class="legend-publication"></i>Publication month</span><span><i class="legend-conference"></i>Verified conference month</span></div><div id="monthChart"></div></div>
+      </section>
+      <section id="sourcesPanel" class="content-panel" hidden>
+        <div class="list-heading"><h2>Sources & changes</h2></div><div class="panel"><p id="changeSummary"></p><h3>Webpages and reference sources</h3><ul id="sourceList" class="source-links"></ul><div id="referenceLinks"></div></div>
+      </section>
+    </div>
+    <section id="loadError" class="panel" hidden><h1>Collection not available</h1><p id="loadErrorMessage"></p><p>Run <code>python3 -m pubgroup run</code>, then <code>python3 -m pubgroup serve</code> from the project folder.</p></section>
+    <footer>Publication Group <span id="versionLabel">1.1.1 · build 20261013.3</span><span>CiênciaVitae · Crossref · DataCite</span></footer>
+  </main>
+  <dialog id="actionDialog"><form method="dialog"><button class="dialog-close" aria-label="Close">×</button></form><h2 id="dialogTitle"></h2><div id="dialogContent"></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

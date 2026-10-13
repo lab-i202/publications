@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "publication-group"
+version = "1.1.1"
+description = "Research group publication collector, LaTeX reports and static web listing"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+encryption = ["cryptography>=46.0.0,<51"]
+
+[project.scripts]
+pubgroup = "pubgroup.__main__:main"
+
+[tool.setuptools]
+packages = ["pubgroup"]

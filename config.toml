@@ -1,0 +1,86 @@
+# Publication Group v1.1.1 / build 20261013.3
+[group]
+name = "i202 · Research publications"
+timezone = "Europe/Lisbon"
+reference_urls = ["https://www.upwindresearchproject.com/about", "https://www.upwindresearchproject.com/publications", "https://www.zotero.org/groups/5341747/upwind_site/library"]
+
+[report]
+# current | all | range | a year such as "2025"
+period = "current"
+start_year = 2020
+end_year = 2026
+# profile preserves CV year; publisher uses verified DOI publication dates.
+date_basis = "profile"
+include_types = [] # Empty means all publication categories.
+include_statuses = [] # Empty includes published, accepted, in press and unspecified.
+
+[network]
+timeout_seconds = 30
+retries = 2
+delay_seconds = 0.35
+cache_hours = 24
+contact_email = "" # Optional email for the Crossref polite pool.
+
+[enrichment]
+enabled = true
+# Exact DOI lookups in Crossref, then DataCite. No name-based imports.
+title_candidates = false # Optional Crossref suggestions, always require review.
+zotero_group_id = "5341747" # Public library linked by the supplied UPWIND page.
+review_zotero = true # Unmatched entries are review suggestions; never auto-imported.
+
+[events]
+enabled = true
+scope = "report" # Resolve the report period first; use "all" for the full catalogue.
+# Crossref event metadata is checked automatically. Optional web discovery:
+web_search = "brave" # Requires BRAVE_SEARCH_API_KEY in the environment.
+lookup_limit = 12 # New conference editions per run; resolved entries are cached.
+cache_days = 90
+
+[output]
+directory = "output"
+web_directory = "web"
+compile_pdf = true
+
+[[researchers]]
+id = "F21A-4DC9-91B8"
+url = "https://www.cienciavitae.pt/portal/F21A-4DC9-91B8"
+
+[[researchers]]
+id = "9A13-2FC9-CB20"
+url = "https://www.cienciavitae.pt/portal/9A13-2FC9-CB20"
+
+[[researchers]]
+id = "7A11-FA9D-70BC"
+url = "https://www.cienciavitae.pt/portal/7A11-FA9D-70BC"
+
+[[researchers]]
+id = "261D-86F7-A774"
+url = "https://www.cienciavitae.pt/portal/261D-86F7-A774"
+
+[[researchers]]
+id = "3716-EBD5-6CFE"
+url = "https://www.cienciavitae.pt/portal/3716-EBD5-6CFE"
+
+[[researchers]]
+id = "891A-BDE5-9FD8"
+url = "https://www.cienciavitae.pt/portal/891A-BDE5-9FD8"
+
+[[researchers]]
+id = "D117-BD12-20F8"
+url = "https://www.cienciavitae.pt/portal/D117-BD12-20F8"
+
+[[researchers]]
+id = "1316-1F11-27BD"
+url = "https://www.cienciavitae.pt/portal/1316-1F11-27BD"
+
+[[researchers]]
+id = "E31D-A8CB-82D3"
+url = "https://www.cienciavitae.pt/portal/E31D-A8CB-82D3"
+
+[[researchers]]
+id = "3819-3691-B535"
+url = "https://www.cienciavitae.pt/portal/3819-3691-B535"
+
+[[researchers]]
+id = "E01E-894D-7B6F"
+url = "https://www.cienciavitae.pt/portal/E01E-894D-7B6F"
