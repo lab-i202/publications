@@ -1,146 +1,147 @@
-name: Collect publications and deploy Pages
+name: Monitor authors and deploy encrypted Pages
+
 on:
   workflow_dispatch:
     inputs:
       period:
         description: 'Report period: current, all, range, or a year'
+        type: string
         required: true
         default: 'current'
-        type: string
-      encrypted:
-        description: 'Encrypt catalogue and PDF (requires PUBGROUP_PASSPHRASE secret)'
-        required: true
-        default: true
-        type: boolean
       fresh:
-        description: 'Fetch profiles and DOI metadata again, ignoring fresh cache'
-        default: false
+        description: 'Force fresh retrieval of every external source'
         type: boolean
+        default: false
       reset_state:
-        description: 'Start a new baseline (use after changing the passphrase)'
-        default: false
+        description: 'Discard previous encrypted state (also resets change history)'
         type: boolean
+        default: false
+  schedule:
+    - cron: '17 6 * * *' # Every day at 06:17 UTC. Scheduled times can be delayed.
+
 permissions:
   contents: read
+
 concurrency:
   group: publications-pages
   cancel-in-progress: false
+
 jobs:
-  build:
+  collect:
+    name: Collect authors (macOS)
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    runs-on: ubuntu-latest
+    runs-on: macos-15
+    timeout-minutes: 60
     steps:
-      - name: Refuse unencrypted public deployment
-        if: ${{ inputs.encrypted != true }}
-        run: |
-          echo '::error::Unencrypted publication exports must never be published on public Pages.'
-          exit 1
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install encryption library
+        run: python -m pip install -r requirements.txt
+      - name: Validate encryption secret
+        env:
+          PUBGROUP_PASSPHRASE: ${{ secrets.PUBGROUP_PASSPHRASE }}
+        run: |
+          python - <<'PY'
+          import os
+          if len(os.environ.get('PUBGROUP_PASSPHRASE', '')) < 16:
+              raise SystemExit('Repository secret PUBGROUP_PASSPHRASE must contain at least 16 characters.')
+          print('Encryption secret is configured.')
+          PY
       - uses: actions/cache/restore@v4
-        if: ${{ !inputs.reset_state }}
+        if: ${{ inputs.reset_state != true }}
         with:
           path: .ci-private/state.enc.json
-          key: publications-encrypted-state-v1-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: pubgroup-macos-v1-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            publications-encrypted-state-v1-${{ github.ref_name }}-
-      - name: Refresh trusted certificate authorities
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --reinstall ca-certificates
-          sudo update-ca-certificates
-      - name: Verify CiênciaVitae HTTPS certificate
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo 'curl version and TLS backend:'
-          curl --version
-          echo 'Checking HTTPS with normal certificate verification:'
-          if ! curl --silent --show-error --location --max-time 25 \
-               --proto '=https' --proto-redir '=https' \
-               --output /dev/null \
-               --write-out 'CiênciaVitae robots.txt HTTP status: %{http_code}\n' \
-               'https://www.cienciavitae.pt/robots.txt'; then
-            echo 'Certificate diagnostic (normal verification remains enabled):'
-            curl --verbose --max-time 15 --output /dev/null \
-              'https://www.cienciavitae.pt/robots.txt' 2>&1 \
-              | grep -E 'CAfile:|CApath:|SSL certificate|issuer:|subject:|curl: ' || true
-            echo 'Certificate chain verification (OpenSSL):'
-            timeout 15s openssl s_client -brief -verify_return_error \
-              -connect www.cienciavitae.pt:443 -servername www.cienciavitae.pt \
-              </dev/null 2>&1 || true
-            echo '::error::HTTPS certificate verification failed; do not use --insecure.'
-            exit 1
-          fi
-      - name: Install LaTeX and optional encryption
-        run: |
-          sudo apt-get install -y texlive-xetex texlive-latex-extra texlive-fonts-recommended curl
-          python -m pip install -r requirements.txt
-      - name: Restore encrypted collection state
-        id: state-restore
+            pubgroup-macos-v1-${{ github.ref_name }}-
+      - name: Restore previous encrypted collection
         env:
           PUBGROUP_PASSPHRASE: ${{ secrets.PUBGROUP_PASSPHRASE }}
         run: python -m pubgroup.ci_state restore
       - name: Regression tests
         run: python -m unittest discover -s tests -v
-      - name: Collect and build
+      - name: Poll all configured CiênciaVitae authors
         env:
-          REPORT_PERIOD: ${{ inputs.period }}
-          ENCRYPTED_EXPORT: ${{ inputs.encrypted }}
-          FRESH_SOURCES: ${{ inputs.fresh }}
           PUBGROUP_PASSPHRASE: ${{ secrets.PUBGROUP_PASSPHRASE }}
           BRAVE_SEARCH_API_KEY: ${{ secrets.BRAVE_SEARCH_API_KEY }}
+          REPORT_PERIOD: ${{ inputs.period || 'current' }}
+          FORCE_FRESH: ${{ github.event_name == 'schedule' || inputs.fresh == true }}
         run: |
           python - <<'PY'
-          import os, subprocess
-          args = ['python', '-m', 'pubgroup', 'run', '--period', os.environ['REPORT_PERIOD']]
-          if os.environ['ENCRYPTED_EXPORT'] == 'true':
-              if len(os.environ.get('PUBGROUP_PASSPHRASE', '')) < 16:
-                  raise SystemExit('Configure PUBGROUP_PASSPHRASE secret with at least 16 characters')
-              args.append('--encrypt')
-          if os.environ['FRESH_SOURCES'] == 'true':
-              args.append('--refresh')
-          subprocess.run(args, check=True)
+          import os
+          import subprocess
+          command = ['python', '-m', 'pubgroup', 'run', '--period', os.environ['REPORT_PERIOD'], '--no-pdf', '--encrypt']
+          if os.environ['FORCE_FRESH'] == 'true':
+              command.append('--refresh')
+          subprocess.run(command, check=True)
           PY
-      - name: Encrypt collection state for cache
-        id: state-save
-        if: ${{ always() && steps.state-restore.outcome == 'success' && hashFiles('data/state.json') != '' }}
+      - name: Encrypt collection state
         env:
           PUBGROUP_PASSPHRASE: ${{ secrets.PUBGROUP_PASSPHRASE }}
         run: python -m pubgroup.ci_state save
       - uses: actions/cache/save@v4
-        if: ${{ always() && steps.state-save.outcome == 'success' }}
         with:
           path: .ci-private/state.enc.json
-          key: publications-encrypted-state-v1-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-      - name: Prepare deployment allowlist
+          key: pubgroup-macos-v1-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Transfer encrypted state only
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication-encrypted-state
+          path: .ci-private/state.enc.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    name: Build encrypted website and PDF (Ubuntu)
+    needs: collect
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install encryption library
+        run: python -m pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: publication-encrypted-state
+          path: .ci-private
+      - name: Restore authenticated publication data
         env:
-          ENCRYPTED_EXPORT: ${{ inputs.encrypted }}
+          PUBGROUP_PASSPHRASE: ${{ secrets.PUBGROUP_PASSPHRASE }}
         run: |
-          python - <<'PY'
-          import json, os, pathlib, shutil
-          web, dist = pathlib.Path('web'), pathlib.Path('dist')
-          dist.mkdir(exist_ok=True)
-          encrypted = os.environ['ENCRYPTED_EXPORT'] == 'true'
-          manifest = json.loads((web/'manifest.json').read_text())
-          if manifest['encrypted'] != encrypted:
-              raise SystemExit('Export mode does not match requested deployment mode')
-          names = ['index.html', 'app.js', 'styles.css', '.nojekyll', 'manifest.json']
-          names += ['bundle.enc.json'] if encrypted else ['publications.json', 'publications.bib', 'report.pdf']
-          for name in names:
-              shutil.copy2(web/name, dist/name)
-          PY
+          test -s .ci-private/state.enc.json
+          python -m pubgroup.ci_state restore
+      - name: Install PDF compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends texlive-xetex texlive-latex-extra texlive-fonts-recommended
+      - name: Generate PDF and encrypted browser bundle (no recollection)
+        env:
+          PUBGROUP_PASSPHRASE: ${{ secrets.PUBGROUP_PASSPHRASE }}
+          REPORT_PERIOD: ${{ inputs.period || 'current' }}
+        run: python -m pubgroup report --period "$REPORT_PERIOD" --encrypt
+      - name: Construct strict deployment allowlist
+        env:
+          REFRESH_API_URL: ${{ vars.PUBGROUP_REFRESH_API_URL }}
+        run: python scripts/prepare_pages.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
+
   deploy:
+    name: Publish encrypted website
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pages: write
       id-token: write
