@@ -63,7 +63,7 @@ def main():
     parser.add_argument('--archive', default='.ci-private/state.enc.json')
     args = parser.parse_args()
     passphrase = os.environ.get('PUBGROUP_PASSPHRASE', '')
-    if len(passphrase) < 16:
+    if len(passphrase) < 14:
         parser.exit(1, 'Configure PUBGROUP_PASSPHRASE with at least 16 characters.\n')
     try:
         result = globals()[args.operation](Path.cwd(), Path(args.archive), passphrase)

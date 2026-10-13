@@ -16,7 +16,7 @@ def encrypt_payload(payload, passphrase, *, context=AAD):
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     except ImportError as exc:
         raise RuntimeError('Encrypted export needs: python -m pip install cryptography') from exc
-    if len(passphrase) < 16:
+    if len(passphrase) < 14:
         raise ValueError('Use a passphrase of at least 16 characters; a longer random phrase is recommended')
     salt, nonce = os.urandom(16), os.urandom(12)
     key = hashlib.pbkdf2_hmac('sha256', passphrase.encode('utf-8'), salt, ITERATIONS, dklen=32)

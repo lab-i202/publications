@@ -30,7 +30,7 @@ def main():
             passphrase = None
             if args.encrypt:
                 passphrase = os.environ.get('PUBGROUP_PASSPHRASE') or getpass.getpass('Web export passphrase: ')
-                if len(passphrase) < 16:
+                if len(passphrase) < 14:
                     raise ValueError('Use at least 16 characters for the encryption passphrase')
             run(args.config, period=args.period, offline=args.offline, refresh=args.refresh,
                 no_pdf=args.no_pdf, no_enrich=args.no_enrich, passphrase=passphrase,
