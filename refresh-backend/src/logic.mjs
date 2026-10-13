@@ -5,7 +5,7 @@ export const COOLDOWN_MS = 15 * 60 * 1000;
 export const MAX_PASSWORD_LENGTH = 512;
 
 export function validatePassphrase(value) {
-  return typeof value === 'string' && value.length >= 16 && value.length <= MAX_PASSWORD_LENGTH;
+  return typeof value === 'string' && value.length >= 14 && value.length <= MAX_PASSWORD_LENGTH;
 }
 
 export function nextAttempt(previous, now) {
