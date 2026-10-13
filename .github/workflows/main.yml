@@ -1,0 +1,121 @@
+name: Collect publications and deploy Pages
+on:
+  workflow_dispatch:
+    inputs:
+      period:
+        description: 'Report period: current, all, range, or a year'
+        required: true
+        default: 'current'
+        type: string
+      encrypted:
+        description: 'Encrypt catalogue and PDF (requires PUBGROUP_PASSPHRASE secret)'
+        required: true
+        default: true
+        type: boolean
+      fresh:
+        description: 'Fetch profiles and DOI metadata again, ignoring fresh cache'
+        default: false
+        type: boolean
+      reset_state:
+        description: 'Start a new baseline (use after changing the passphrase)'
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: publications-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache/restore@v4
+        if: ${{ !inputs.reset_state }}
+        with:
+          path: .ci-private/state.enc.json
+          key: publications-encrypted-state-v1-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            publications-encrypted-state-v1-${{ github.ref_name }}-
+      - name: Install LaTeX and optional encryption
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-xetex texlive-latex-extra texlive-fonts-recommended curl
+          python -m pip install -r requirements.txt
+      - name: Restore encrypted collection state
+        id: state-restore
+        env:
+          PUBGROUP_PASSPHRASE: ${{ secrets.PUBGROUP_PASSPHRASE }}
+        run: python -m pubgroup.ci_state restore
+      - name: Regression tests
+        run: python -m unittest discover -s tests -v
+      - name: Collect and build
+        env:
+          REPORT_PERIOD: ${{ inputs.period }}
+          ENCRYPTED_EXPORT: ${{ inputs.encrypted }}
+          FRESH_SOURCES: ${{ inputs.fresh }}
+          PUBGROUP_PASSPHRASE: ${{ secrets.PUBGROUP_PASSPHRASE }}
+          BRAVE_SEARCH_API_KEY: ${{ secrets.BRAVE_SEARCH_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          args = ['python', '-m', 'pubgroup', 'run', '--period', os.environ['REPORT_PERIOD']]
+          if os.environ['ENCRYPTED_EXPORT'] == 'true':
+              if len(os.environ.get('PUBGROUP_PASSPHRASE', '')) < 16:
+                  raise SystemExit('Configure PUBGROUP_PASSPHRASE secret with at least 16 characters')
+              args.append('--encrypt')
+          if os.environ['FRESH_SOURCES'] == 'true':
+              args.append('--refresh')
+          subprocess.run(args, check=True)
+          PY
+      - name: Encrypt collection state for cache
+        id: state-save
+        if: ${{ always() && steps.state-restore.outcome == 'success' && hashFiles('data/state.json') != '' }}
+        env:
+          PUBGROUP_PASSPHRASE: ${{ secrets.PUBGROUP_PASSPHRASE }}
+        run: python -m pubgroup.ci_state save
+      - uses: actions/cache/save@v4
+        if: ${{ always() && steps.state-save.outcome == 'success' }}
+        with:
+          path: .ci-private/state.enc.json
+          key: publications-encrypted-state-v1-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Prepare deployment allowlist
+        env:
+          ENCRYPTED_EXPORT: ${{ inputs.encrypted }}
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, shutil
+          web, dist = pathlib.Path('web'), pathlib.Path('dist')
+          dist.mkdir(exist_ok=True)
+          encrypted = os.environ['ENCRYPTED_EXPORT'] == 'true'
+          manifest = json.loads((web/'manifest.json').read_text())
+          if manifest['encrypted'] != encrypted:
+              raise SystemExit('Export mode does not match requested deployment mode')
+          names = ['index.html', 'app.js', 'styles.css', '.nojekyll', 'manifest.json']
+          names += ['bundle.enc.json'] if encrypted else ['publications.json', 'publications.bib', 'report.pdf']
+          for name in names:
+              shutil.copy2(web/name, dist/name)
+          PY
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
