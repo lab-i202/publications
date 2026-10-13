@@ -66,7 +66,7 @@ export class RefreshCoordinator extends DurableObject {
 
   async handleRequest(passphrase, ip) {
     const now = Date.now();
-    if (!this.env.REFRESH_PASSPHRASE || this.env.REFRESH_PASSPHRASE.length < 32 ||
+    if (!this.env.REFRESH_PASSPHRASE || this.env.REFRESH_PASSPHRASE.length < 16 ||
         !this.env.GITHUB_DISPATCH_TOKEN) {
       return {status: 503, body: {error:'The refresh service is not configured.'}};
     }
