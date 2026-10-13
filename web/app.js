@@ -88,9 +88,9 @@ function renderList() {
     const copy=el('button','Copy BibTeX','button');copy.type='button';copy.addEventListener('click',async()=>{
       try{await navigator.clipboard.writeText(p.bibtex);toast('BibTeX copied');}catch{download(new Blob([p.bibtex],{type:'text/plain;charset=utf-8'}),p.id+'.bib');toast('Clipboard unavailable; BibTeX downloaded');}
     });actions.append(copy);body.append(actions);
-    const details=el('details',undefined,'details');details.append(el('summary','Citation, dates & sources'));
-    details.append(el('p',`Date source: ${p.date_source}. First seen: ${(p.first_seen||'').slice(0,10)}.${p.publisher_date?' DOI publication date: '+p.publisher_date+'.':''}`));
-    if(p.event){const note=el('p',`Conference: ${p.event.start_date} to ${p.event.end_date}. `);note.append(anchor('Date source',p.event.source_url));details.append(note);}
+    const details=el('details',undefined,'details');details.append(el('summary','Citation, data & sources'));
+    details.append(el('p',`Data source: ${p.date_source}. First seen: ${(p.first_seen||'').slice(0,10)}.${p.publisher_date?' DOI publication date: '+p.publisher_date+'.':''}`));
+    if(p.event){details.append(el('p',`Conference: ${p.event.start_date} to ${p.event.end_date}.`));}
     if(p.warnings?.length)details.append(el('p',p.warnings.join('; ')));
     if(p.doi_check)details.append(el('p',`DOI check: ${p.doi_check.status} · ${p.doi_check.source}`));
     const sources=el('p');p.sources.forEach((s,i)=>{if(i)sources.append(document.createTextNode(' · '));sources.append(anchor(dataset.researchers.find(r=>r.id===s.researcher_id)?.name||'CV source',s.url));});details.append(sources,el('pre',p.bibtex));
