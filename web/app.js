@@ -2,6 +2,7 @@
 const $ = id => document.getElementById(id);
 const typeNames = {conference:'Conference paper',journal:'Journal article',chapter:'Book chapter',book:'Book',poster:'Conference poster',abstract:'Conference abstract',thesis:'Thesis',preprint:'Preprint',report:'Report',other:'Other publication'};
 let dataset, manifest, decryptedPDF = null, shown = 30, filtered = [], localToken = null;
+let refreshServiceURL = null, activePassphrase = null;
 let toastTimer, objectURLs = [];
 function el(tag, text, cls) { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; }
 function safeURL(value) { try { const u = new URL(value); return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password ? u.href : null; } catch { return null; } }
@@ -142,12 +143,74 @@ async function localJob(mode) {
     manifest=await fetchJSON('manifest.json');decryptedPDF=null;setup(await fetchJSON(manifest.dataset));toast('Collection and report updated');
   }catch(e){dialog('Job could not finish',[el('p',e.message)]);}finally{b.disabled=false;}
 }
-$('unlockForm').addEventListener('submit',async e=>{e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;$('unlockMessage').textContent='Decrypting…';try{const payload=await decrypt(await fetchJSON(manifest.bundle),$('passphrase').value);decryptedPDF=payload.pdf?new Blob([bytes64(payload.pdf)],{type:'application/pdf'}):null;setup(payload.dataset);$('passphrase').value='';$('unlockMessage').textContent='';}catch(e){$('unlockMessage').textContent=e.name==='OperationError'?'Passphrase incorrect or encrypted file damaged.':e.message;}finally{button.disabled=false;}});
+$('unlockForm').addEventListener('submit',async e=>{e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;$('unlockMessage').textContent='Decrypting…';try{const candidate=$('passphrase').value;const payload=await decrypt(await fetchJSON(manifest.bundle),candidate);decryptedPDF=payload.pdf?new Blob([bytes64(payload.pdf)],{type:'application/pdf'}):null;activePassphrase=candidate;setup(payload.dataset);$('passphrase').value='';$('unlockMessage').textContent='';}catch(e){$('unlockMessage').textContent=e.name==='OperationError'?'Passphrase incorrect or encrypted file damaged.':e.message;}finally{button.disabled=false;}});
 $('lockButton').addEventListener('click',()=>{location.reload();});
 ['searchInput','yearFilter','typeFilter','researcherFilter','statusFilter','newFilter'].forEach(id=>$(id).addEventListener(id==='searchInput'?'input':'change',applyFilters));
 $('loadMore').addEventListener('click',()=>{shown+=30;renderList();});
 document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(t=>{const on=t===tab;t.classList.toggle('active',on);t.setAttribute('aria-pressed',String(on));$(t.dataset.panel).hidden=!on;});}));
 $('bibButton').addEventListener('click',()=>download(new Blob([filtered.map(p=>p.bibtex).join('\n')],{type:'text/plain;charset=utf-8'}),'publications.bib'));
 $('pdfButton').addEventListener('click',async()=>{if(decryptedPDF){download(decryptedPDF,`publications-${dataset.period_label}.pdf`);return;}try{const latest=await fetchJSON(manifest.dataset);if(latest.generated_at!==dataset.generated_at||latest.period_label!==dataset.period_label){setup(latest);toast('The prepared report changed; the library was refreshed. Click download again.');return;}const r=await fetch(manifest.pdf);if(!r.ok)throw Error('PDF unavailable');download(await r.blob(),`publications-${dataset.period_label}.pdf`);}catch(e){toast(e.message);}});
-$('refreshButton').addEventListener('click',()=>localJob('run'));
-(async()=>{try{manifest=await fetchJSON('manifest.json');if(manifest.encrypted){$('unlockPanel').hidden=false;$('privacyBadge').textContent='Encrypted export';}else setup(await fetchJSON(manifest.dataset));try{const status=await fetchJSON('/api/status');if(status.token&&!manifest.encrypted){localToken=status.token;const b=el('button','Build PDF for selected year','button quiet');b.id='buildPDFButton';b.addEventListener('click',()=>localJob('report'));document.querySelector('.hero-actions').append(b);$('privacyBadge').textContent='Local collector connected';}}catch{/* Static hosting has no local collector. */}}catch(e){$('loadError').hidden=false;$('loadErrorMessage').textContent=e.message;}})();
+
+// Static GitHub Pages cannot run Python. Remote refresh requests are authorized
+// by a separate Cloudflare Worker; the GitHub token is never present in this JS.
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function initializeRefreshService() {
+  try {
+    const config = await fetchJSON('refresh-config.json');
+    if (typeof config.api_base !== 'string' || !config.api_base) return;
+    const url = new URL(config.api_base);
+    if (url.protocol !== 'https:' || !url.hostname || url.username || url.password ||
+        url.search || url.hash || (url.pathname !== '/' && url.pathname !== '')) return;
+    refreshServiceURL = url.origin;
+  } catch { /* Local installs and older exports may have no remote backend. */ }
+}
+async function refreshFromWebsite() {
+  if (!refreshServiceURL || !manifest.encrypted || !activePassphrase) {
+    return localJob('run');
+  }
+  const button = $('refreshButton'), status = $('refreshStatus');
+  button.disabled = true;
+  status.textContent = 'Requesting a new publication collection…';
+  try {
+    const response = await fetch(refreshServiceURL + '/refresh', {
+      method:'POST',
+      mode:'cors',
+      credentials:'omit',
+      cache:'no-store',
+      referrerPolicy:'no-referrer',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({passphrase:activePassphrase}),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const wait = Number(result.retry_after);
+      throw Error((result.error || `Request failed (HTTP ${response.status})`) +
+                  (Number.isFinite(wait) && wait > 0 ? ` Try again in ${Math.ceil(wait / 60)} minute(s).` : ''));
+    }
+    if (!result.accepted) throw Error('The refresh request was not accepted.');
+    status.textContent = 'Collection requested. Waiting for the new encrypted website (this may take several minutes)…';
+    const originalRevision = manifest.revision || null;
+    const deadline = Date.now() + 20 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await sleep(15000);
+      const latest = await fetchJSON('manifest.json').catch(() => null);
+      if (!latest || latest.encrypted !== true || !latest.revision || latest.revision === originalRevision) continue;
+      const newPayload = await decrypt(await fetchJSON(latest.bundle), activePassphrase);
+      decryptedPDF = newPayload.pdf ? new Blob([bytes64(newPayload.pdf)], {type:'application/pdf'}) : null;
+      manifest = latest;
+      setup(newPayload.dataset);
+      status.textContent = 'The newly published collection has been loaded.';
+      toast('Publication collection updated');
+      return;
+    }
+    status.textContent = 'Refresh was requested, but no newer deployment has appeared. Check the repository Actions log.';
+  } catch (error) {
+    status.textContent = 'Refresh could not be completed.';
+    dialog('Publication refresh', [el('p',error.message)]);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$('refreshButton').addEventListener('click',refreshFromWebsite);
+(async()=>{try{await initializeRefreshService();manifest=await fetchJSON('manifest.json');if(manifest.encrypted){$('unlockPanel').hidden=false;$('privacyBadge').textContent='Encrypted export';}else setup(await fetchJSON(manifest.dataset));try{const status=await fetchJSON('/api/status');if(status.token&&!manifest.encrypted){localToken=status.token;const b=el('button','Build PDF for selected year','button quiet');b.id='buildPDFButton';b.addEventListener('click',()=>localJob('report'));document.querySelector('.hero-actions').append(b);$('privacyBadge').textContent='Local collector connected';}}catch{/* Static hosting has no local collector. */}}catch(e){$('loadError').hidden=false;$('loadErrorMessage').textContent=e.message;}})();

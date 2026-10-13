@@ -1,3 +1,11 @@
+## Unreleased — Website-triggered refresh
+
+- Added Cloudflare Worker + SQLite Durable Object to authorize a website Refresh sources request using the existing publication passphrase. A GitHub token remains server-side only.
+- Added per-IP failed/total attempt limit (8/10 minutes), global dispatch cooldown (15 minutes), request serialization, strict CORS and CSP, and explicit no-plaintext deployment checks.
+- Added an encrypted-bundle revision marker in the public manifest. The browser polls for a deployed revision and decrypts it locally before reporting completion.
+- Added refresh-backend unit/integration tests and complete setup/security documentation.
+- Existing daily hosted-collector workflow, local loopback behavior, research parser and PDF processing retained.
+
 # Changelog
 
 ## 1.1.1 — build 20261013.3 — 2026-10-13

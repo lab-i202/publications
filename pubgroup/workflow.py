@@ -97,6 +97,9 @@ def _run(config_path, period=None, offline=False, refresh=False, no_pdf=False, n
                 rejected.extend(dict(researcher_id=profile['id'], **x) for x in rejects)
             except (FetchError, ValueError) as exc:
                 s.update(status='unavailable', error=str(exc), record_count=0, rejected_count=0)
+                # Surface source-specific failures in CI instead of only a generic
+                # final error. Profile IDs and public fetch errors are not secrets.
+                print(f"  Unavailable {profile['id']}: {type(exc).__name__}: {exc}", flush=True)
                 researchers.append(old_by_id.get(profile['id'], dict(id=profile['id'], name=profile['id'], url=profile['url'], orcid='')))
             if s['status'] != 'ok' and previous:
                 for old in previous['publications']:

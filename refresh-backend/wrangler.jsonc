@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "pubgroup-refresh",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "observability": {"enabled": false},
+  "durable_objects": {
+    "bindings": [{"name": "REFRESH_COORDINATOR", "class_name": "RefreshCoordinator"}]
+  },
+  "migrations": [{"tag": "v1", "new_sqlite_classes": ["RefreshCoordinator"]}],
+  "vars": {
+    "ALLOWED_ORIGIN": "https://lab-i202.github.io",
+    "GITHUB_OWNER": "lab-i202",
+    "GITHUB_REPO": "publications",
+    "GITHUB_WORKFLOW": "main.yml",
+    "GITHUB_REF": "main"
+  }
+}

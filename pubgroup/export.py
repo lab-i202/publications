@@ -55,7 +55,8 @@ def build_web(dataset, pdf, destination, passphrase=None):
     bibliography = '\n'.join(p['bibtex'] for p in dataset['publications'])
     if passphrase:
         atomic_json(destination / 'bundle.enc.json', encrypted_bundle)
-        manifest = dict(encrypted=True, bundle='bundle.enc.json')
+        manifest = dict(encrypted=True, bundle='bundle.enc.json',
+                        revision=hashlib.sha256(encrypted_bundle['ciphertext'].encode('ascii')).hexdigest())
     else:
         atomic_json(destination / 'publications.json', dataset)
         (destination / 'publications.bib').write_text(bibliography, encoding='utf-8')

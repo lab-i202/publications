@@ -18,3 +18,10 @@ build/
 dist/
 tmp/
 pdf_to_pptx/
+# Cloudflare backend dependency tree, local state and development secrets
+node_modules/
+.wrangler/
+.dev.vars
+.dev.vars.*
+refresh-backend/.env
+refresh-backend/.env.*

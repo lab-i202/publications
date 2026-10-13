@@ -44,7 +44,7 @@ def serve(config_path, port=8765):
                 self.send_error(404); return
             # Deny arbitrary files even if a user accidentally copies state into web/.
             allowed = {'/', '/index.html', '/app.js', '/styles.css', '/manifest.json',
-                       '/publications.json', '/publications.bib', '/report.pdf', '/bundle.enc.json'}
+                       '/publications.json', '/publications.bib', '/report.pdf', '/bundle.enc.json', '/refresh-config.json'}
             if path not in allowed:
                 self.send_error(404); return
             super().do_GET()

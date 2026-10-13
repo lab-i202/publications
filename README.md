@@ -74,7 +74,7 @@ Generated files are ignored by Git. Local outputs and caches are **not encrypted
 - Generic conference-date resolution using Crossref, linked webpages and optional Brave web search; source-backed results are cached.
 - Web search, year/type/researcher/status/new filters, alphabetical researcher names, pagination, BibTeX and PDF downloads, and Light/Dark/System theme selection.
 - Sources & changes presents a simple list of referenced webpages; detailed collection diagnostics stay in local audit files.
-- Local webpage buttons for collection refresh and building a report for the selected year. These controls use the loopback collector. A static hosted webpage shows the command to run instead.
+- Local webpage buttons for collection refresh and building a report for the selected year. Static GitHub Pages supports password-authorized website refresh via the optional Cloudflare backend described in docs/WEB_REFRESH.md; without that backend it shows local/manual instructions.
 - Optional AES-256-GCM encrypted static export containing both the library and PDF.
 - GitHub Pages workflow with manual collection/deployment, encrypted export enabled by default and encrypted persistent collection-state cache.
 
@@ -103,4 +103,30 @@ Encryption tests skip when `cryptography` is absent. Install the optional depend
 
 The catalogue reflects publicly visible CV records, not a complete database of the group's research. It does not infer group membership at publication time. The supplied UPWIND team page is context, not another personal CV. Public HTML layouts can change. Missing dates, statuses, links and conflicts remain visible. No Google Scholar or Scopus scraping, private CV access, paywall bypass or unattended account login is included.
 
-GitHub Pages cannot run the collector or LaTeX from a visitor's browser. Use the local collector or the supplied manual GitHub Actions workflow. An encrypted static export protects the content at rest with a sufficiently strong passphrase; it is not individual-user authentication or a WebAuthn passkey service.
+GitHub Pages cannot itself execute the Python collector or LaTeX. The optional Cloudflare refresh service securely triggers the supplied GitHub Actions workflow for users who know the shared passphrase. An encrypted static export protects the content at rest with a sufficiently strong passphrase; it is not individual-user authentication or a WebAuthn passkey service.
+
+
+## Automatic hosted collection (GitHub Actions)
+
+The supported workflow is `.github/workflows/main.yml`. It runs daily at 06:17 UTC
+and can also be started manually. Collection is performed on a GitHub-hosted macOS
+runner, with HTTPS certificate verification enabled. Only an AES-GCM-encrypted
+state artifact is transferred to Ubuntu, which compiles the PDF, creates the
+encrypted web bundle and deploys GitHub Pages. Your own Mac need not be online.
+
+The first successful run establishes a baseline. Subsequent runs restore state
+from the encrypted Actions cache. Cache entries can expire or be evicted; this
+is NOT a durable archive, so keep separate private backups if publication
+change history is critical. The SSL behavior of GitHub-hosted macOS runners
+must be verified in a live workflow execution; successful collection is not
+guaranteed by a YAML check.
+
+Never enable another overlapping deployment workflow. The encrypted bundle
+contains the PDF and bibliography; plaintext source caches, data and PDFs are
+not uploaded as website artifacts.
+
+## Website-triggered publication refresh
+
+The complete optional Cloudflare Worker/Durable Object backend is under `refresh-backend/`. It uses a fine-grained GitHub Actions token stored only as a Cloudflare secret and authorizes requests with the same long random passphrase used to decrypt the publication bundle. It enforces per-IP password attempt limits and a global cooldown; the browser polls for a new encrypted publication bundle. See [deployment and security instructions](docs/WEB_REFRESH.md).
+
+In addition to `python3 -m unittest discover -s tests -v`, run `cd refresh-backend && npm test`. Remote deployment and macOS-runner upstream connectivity must be tested in the actual accounts; neither can be demonstrated by offline tests.

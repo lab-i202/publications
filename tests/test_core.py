@@ -105,7 +105,12 @@ class ExportTests(unittest.TestCase):
             for n in ('publications.json','report.pdf','publications.bib'): (web/n).write_text('secret')
             build_web({'publications':[]},pdf,web,'a sufficiently long test passphrase')
             self.assertFalse((web/'publications.json').exists());self.assertFalse((web/'report.pdf').exists());self.assertFalse((web/'publications.bib').exists())
-            self.assertTrue(json.loads((web/'manifest.json').read_text())['encrypted'])
+            manifest = json.loads((web/'manifest.json').read_text())
+            self.assertTrue(manifest['encrypted'])
+            self.assertRegex(manifest['revision'], r'^[0-9a-f]{64}$')
+            old_revision = manifest['revision']
+            build_web({'publications':[]},pdf,web,'a sufficiently long test passphrase')
+            self.assertNotEqual(json.loads((web/'manifest.json').read_text())['revision'], old_revision)
 
 
 class WorkflowTests(unittest.TestCase):
