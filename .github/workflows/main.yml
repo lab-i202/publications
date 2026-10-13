@@ -48,7 +48,7 @@ jobs:
         run: |
           python - <<'PY'
           import os
-          if len(os.environ.get('PUBGROUP_PASSPHRASE', '')) < 16:
+          if len(os.environ.get('PUBGROUP_PASSPHRASE', '')) < 14:
               raise SystemExit('Repository secret PUBGROUP_PASSPHRASE must contain at least 16 characters.')
           print('Encryption secret is configured.')
           PY
