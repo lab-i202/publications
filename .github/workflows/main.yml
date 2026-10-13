@@ -30,6 +30,11 @@ jobs:
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     steps:
+      - name: Refuse unencrypted public deployment
+        if: ${{ inputs.encrypted != true }}
+        run: |
+          echo '::error::Unencrypted publication exports must never be published on public Pages.'
+          exit 1
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -43,9 +48,36 @@ jobs:
           key: publications-encrypted-state-v1-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             publications-encrypted-state-v1-${{ github.ref_name }}-
-      - name: Install LaTeX and optional encryption
+      - name: Refresh trusted certificate authorities
         run: |
           sudo apt-get update
+          sudo apt-get install -y --reinstall ca-certificates
+          sudo update-ca-certificates
+      - name: Verify CiênciaVitae HTTPS certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'curl version and TLS backend:'
+          curl --version
+          echo 'Checking HTTPS with normal certificate verification:'
+          if ! curl --silent --show-error --location --max-time 25 \
+               --proto '=https' --proto-redir '=https' \
+               --output /dev/null \
+               --write-out 'CiênciaVitae robots.txt HTTP status: %{http_code}\n' \
+               'https://www.cienciavitae.pt/robots.txt'; then
+            echo 'Certificate diagnostic (normal verification remains enabled):'
+            curl --verbose --max-time 15 --output /dev/null \
+              'https://www.cienciavitae.pt/robots.txt' 2>&1 \
+              | grep -E 'CAfile:|CApath:|SSL certificate|issuer:|subject:|curl: ' || true
+            echo 'Certificate chain verification (OpenSSL):'
+            timeout 15s openssl s_client -brief -verify_return_error \
+              -connect www.cienciavitae.pt:443 -servername www.cienciavitae.pt \
+              </dev/null 2>&1 || true
+            echo '::error::HTTPS certificate verification failed; do not use --insecure.'
+            exit 1
+          fi
+      - name: Install LaTeX and optional encryption
+        run: |
           sudo apt-get install -y texlive-xetex texlive-latex-extra texlive-fonts-recommended curl
           python -m pip install -r requirements.txt
       - name: Restore encrypted collection state
